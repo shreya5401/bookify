@@ -182,10 +182,10 @@
     @apply px-1 sm:px-3 text-sm sm:text-base font-medium flex items-center cursor-pointer text-[var(--text-primary)];
   }
   .input-reset {
-    @apply h-12 border-none lg:!text-lg shadow-none focus:outline-none focus-visible:ring-0;
+    @apply h-12 border-none lg:text-lg! shadow-none focus:outline-none focus-visible:ring-0;
   }
   .label {
-    @apply text-lg mb-1 !font-medium;
+    @apply text-lg mb-1 font-medium!;
   }
   .auth-wrapper {
     @apply max-w-7xl px-5 mx-auto w-full min-h-screen pt-20 flex flex-col items-center justify-center py-10;
@@ -197,10 +197,10 @@
     @apply py-18 min-h-screen max-w-7xl px-5 mx-auto w-full flex flex-col pb-12 items-center container;
   }
   .page-title {
-    @apply !text-3xl font-bold text-center;
+    @apply text-3xl! font-bold text-center;
   }
   .page-description {
-    @apply !mt-3 text-center text-lg;
+    @apply mt-3! text-center text-lg;
   }
   .new-book {
     @apply max-w-7xl px-5 mx-auto w-full space-y-6 py-18 min-h-screen;
@@ -212,7 +212,7 @@
     @apply relative z-20 flex flex-col justify-center items-center p-7;
   }
   .form-btn {
-    @apply !w-full h-14 rounded-[10px] bg-[#663820] cursor-pointer hover:bg-[#7a4528] text-xl text-white font-bold transition-colors;
+    @apply w-full! h-14 rounded-[10px] bg-[#663820] cursor-pointer hover:bg-[#7a4528] text-xl text-white font-bold transition-colors;
     font-family: 'IBM Plex Serif', serif;
   }
   .loading-wrapper {
@@ -240,10 +240,10 @@
     @apply w-2 h-2 text-[var(--text-secondary)] bg-[var(--success)] rounded-full animate-pulse;
   }
   .select-trigger {
-    @apply !w-full !h-12 rounded-lg;
+    @apply w-full! h-12! rounded-lg;
   }
   .volume {
-    @apply !ml-auto w-4 h-4 animate-pulse text-[var(--accent-warm)];
+    @apply ml-auto! w-4 h-4 animate-pulse text-[var(--accent-warm)];
   }
   .select-content {
     @apply rounded-xl border border-[var(--border-subtle)] max-h-[400px] shadow-[var(--shadow-soft)];
@@ -920,10 +920,8 @@ button[data-variant='unstyled'] *,
   font-weight: 600 !important;
 }
 
-/* Add accent border to active plan card
-   Note: This uses :first-child which assumes active plan is always first.
-   If Clerk changes the order, this may highlight the wrong card. */
-.cl-pricingTableCard:first-child {
+/* Active plan card - border set by JS via .is-active (see PricingTableActiveIndicator) */
+.cl-pricingTableCard.is-active {
   border: 2px solid #663820 !important;
 }
 
@@ -938,17 +936,14 @@ button[data-variant='unstyled'] *,
   border-radius: 9999px !important;
 }
 
-/* Add "Current Plan" indicator to active plan that doesn't have a button
-   Note: Hardcoded English text - if i18n support is needed, this should be
-   handled in JavaScript with translated strings rendered in the DOM. */
-.cl-pricingTableCard:first-child .cl-pricingTableCardContent::after {
-  content: 'Your Current Plan';
+/* Current plan indicator - real DOM element injected by PricingTableActiveIndicator */
+.current-plan-indicator {
   display: block;
   text-align: center;
   padding: 0.75rem 1.5rem;
   margin-top: 1rem;
-  background-color: #f3e4c7 !important;
-  color: #212a3b !important;
+  background-color: #f3e4c7;
+  color: #212a3b;
   font-weight: 600;
   border-radius: 0.75rem;
   font-size: 1.125rem;
