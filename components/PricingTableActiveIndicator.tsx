@@ -19,15 +19,19 @@ export default function PricingTableActiveIndicator() {
     const MAX_ATTEMPTS = 20
     const RETRY_MS = 300
     let attempts = 0
+    let isMounted = true
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     function applyActiveIndicator() {
+      if (!isMounted) return
+
       const cards = Array.from(
         document.querySelectorAll<HTMLElement>('.cl-pricingTableCard')
       )
 
       if (!cards.length) {
         if (++attempts < MAX_ATTEMPTS) {
-          setTimeout(applyActiveIndicator, RETRY_MS)
+          timeoutId = setTimeout(applyActiveIndicator, RETRY_MS)
         }
         return
       }
@@ -77,6 +81,11 @@ export default function PricingTableActiveIndicator() {
     }
 
     applyActiveIndicator()
+
+    return () => {
+      isMounted = false
+      if (timeoutId !== null) clearTimeout(timeoutId)
+    }
   }, [])
 
   return null
