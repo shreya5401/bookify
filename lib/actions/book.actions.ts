@@ -230,13 +230,19 @@ export const deleteBook = async (bookId: string) => {
             return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null } };
         }
 
+        // Delete DB records first so the book is no longer reachable even if blob deletion fails.
+        await Book.findByIdAndDelete(bookId);
+        await BookSegment.deleteMany({ bookId });
+
         const blobUrlsToDelete: string[] = [book.fileURL];
         if (book.coverURL) blobUrlsToDelete.push(book.coverURL);
 
-        await del(blobUrlsToDelete);
-
-        await Book.findByIdAndDelete(bookId);
-        await BookSegment.deleteMany({ bookId });
+        try {
+            await del(blobUrlsToDelete);
+        } catch (blobErr) {
+            // Log orphaned blobs for out-of-band cleanup; DB records are already gone.
+            console.error('Failed to delete blobs after book removal — manual cleanup may be needed:', blobUrlsToDelete, blobErr);
+        }
 
         return { success: true };
     } catch (e) {
@@ -276,7 +282,7 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
             return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null }, data: [] };
         }
 
-        console.log(`Searching for: "${query}" in book ${bookId}`);
+        console.log(`Searching book ${bookId}, query length: ${query.length}`);
 
         // Try MongoDB text search first (requires text index)
         let segments: Record<string, unknown>[] = [];
@@ -289,9 +295,15 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
                 .sort({ score: { $meta: 'textScore' } })
                 .limit(limit)
                 .lean();
-        } catch {
-            // Text index may not exist — fall through to regex fallback
-            segments = [];
+        } catch (err) {
+            // Only fall back to regex when the text index is missing (MongoDB code 27).
+            // Re-throw for any other error so real failures are not silently swallowed.
+            const errCode = (err as { code?: number }).code;
+            if (errCode === 27) {
+                segments = [];
+            } else {
+                throw err;
+            }
         }
 
         // Fallback: regex search matching ANY keyword

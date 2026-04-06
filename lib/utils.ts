@@ -2,16 +2,18 @@ import { TextSegment } from '@/types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { DEFAULT_VOICE, voiceOptions } from './constants';
+import type { Types } from 'mongoose';
 
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Maps a type to its JSON-serialized shape: Date→string, functions→never, undefined→never, rest unchanged.
+// Maps a type to its JSON-serialized shape: Date→string, ObjectId→string, functions→never, undefined→never, rest unchanged.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export type Serialized<T> =
   T extends Date ? string :
+  T extends Types.ObjectId ? string :
   T extends Array<infer U> ? Serialized<U>[] :
   T extends Function ? never :
   T extends object ? { [K in keyof T]: Serialized<T[K]> } :
@@ -116,56 +118,61 @@ export async function parsePDFFile(file: File) {
 
     // Load PDF document
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-    const pdfDocument = await loadingTask.promise;
-
-    let coverDataURL: string;
-    const segments: TextSegment[] = [];
-
     try {
-      // Render first page as cover image
-      const firstPage = await pdfDocument.getPage(1);
-      const viewport = firstPage.getViewport({ scale: 2 }); // 2x scale for better quality
+      const pdfDocument = await loadingTask.promise;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const context = canvas.getContext('2d');
+      let coverDataURL: string;
+      const segments: TextSegment[] = [];
 
-      if (!context) {
-        throw new Error('Could not get canvas context');
-      }
+      try {
+        // Render first page as cover image
+        const firstPage = await pdfDocument.getPage(1);
+        const viewport = firstPage.getViewport({ scale: 2 }); // 2x scale for better quality
 
-      await firstPage.render({
-        canvas: canvas,
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
 
-      coverDataURL = canvas.toDataURL('image/png');
-
-      // Extract text page-by-page so each segment carries the correct pageNumber
-      let globalSegmentIndex = 0;
-
-      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-        const page = await pdfDocument.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-            .filter((item) => 'str' in item)
-            .map((item) => (item as { str: string }).str)
-            .join(' ');
-
-        for (const seg of splitIntoSegments(pageText)) {
-          segments.push({ ...seg, segmentIndex: globalSegmentIndex++, pageNumber: pageNum });
+        if (!context) {
+          throw new Error('Could not get canvas context');
         }
-      }
-    } finally {
-      await pdfDocument.destroy();
-    }
 
-    return {
-      content: segments,
-      cover: coverDataURL!,
-    };
+        await firstPage.render({
+          canvas: canvas,
+          canvasContext: context,
+          viewport: viewport,
+        }).promise;
+
+        coverDataURL = canvas.toDataURL('image/png');
+
+        // Extract text page-by-page so each segment carries the correct pageNumber
+        let globalSegmentIndex = 0;
+
+        for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+          const page = await pdfDocument.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+              .filter((item) => 'str' in item)
+              .map((item) => (item as { str: string }).str)
+              .join(' ');
+
+          for (const seg of splitIntoSegments(pageText)) {
+            segments.push({ ...seg, segmentIndex: globalSegmentIndex++, pageNumber: pageNum });
+          }
+        }
+      } finally {
+        await pdfDocument.destroy();
+      }
+
+      return {
+        content: segments,
+        cover: coverDataURL!,
+      };
+    } finally {
+      // Ensures the loading task is torn down even if loadingTask.promise rejects.
+      await loadingTask.destroy();
+    }
   } catch (error) {
     console.error('Error parsing PDF:', error);
     throw new Error(`Failed to parse PDF file: ${error instanceof Error ? error.message : String(error)}`);
