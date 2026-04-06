@@ -24,12 +24,12 @@ export const serializeData = <T>(data: T): Serialized<T> => JSON.parse(JSON.stri
 // Auto generate slug
 export function generateSlug(text: string): string {
   return text
-      .replace(/\.[^/.]+$/, '') // Remove file extension (.pdf, .txt, etc.)
       .toLowerCase() // Convert to lowercase
       .trim() // Remove whitespace from both ends
       .replace(/[^\w\s-]/g, '') // Remove special characters (keep letters, numbers, spaces, hyphens)
       .replace(/[\s_]+/g, '-') // Replace spaces and underscores with hyphens
       .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+}
 }
 
 // Escape regex special characters to prevent ReDoS attacks
