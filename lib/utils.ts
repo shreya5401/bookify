@@ -8,8 +8,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Maps a type to its JSON-serialized shape: Date→string, functions→never, undefined→never, rest unchanged.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+export type Serialized<T> =
+  T extends Date ? string :
+  T extends Array<infer U> ? Serialized<U>[] :
+  T extends Function ? never :
+  T extends object ? { [K in keyof T]: Serialized<T[K]> } :
+  T extends undefined ? never :
+  T;
+
 // Serialize Mongoose documents to plain JSON objects (strips ObjectId, Date, etc.)
-export const serializeData = <T>(data: T): T => JSON.parse(JSON.stringify(data));
+export const serializeData = <T>(data: T): Serialized<T> => JSON.parse(JSON.stringify(data));
 
 // Auto generate slug
 export function generateSlug(text: string): string {
@@ -130,8 +140,9 @@ export async function parsePDFFile(file: File) {
     // Convert canvas to data URL
     const coverDataURL = canvas.toDataURL('image/png');
 
-    // Extract text from all pages
-    let fullText = '';
+    // Extract text page-by-page so each segment carries the correct pageNumber
+    const segments: TextSegment[] = [];
+    let globalSegmentIndex = 0;
 
     for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
       const page = await pdfDocument.getPage(pageNum);
@@ -140,11 +151,11 @@ export async function parsePDFFile(file: File) {
           .filter((item) => 'str' in item)
           .map((item) => (item as { str: string }).str)
           .join(' ');
-      fullText += pageText + '\n';
-    }
 
-    // Split text into segments for search
-    const segments = splitIntoSegments(fullText);
+      for (const seg of splitIntoSegments(pageText)) {
+        segments.push({ ...seg, segmentIndex: globalSegmentIndex++, pageNumber: pageNum });
+      }
+    }
 
     // Clean up PDF document resources
     await pdfDocument.destroy();

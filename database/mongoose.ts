@@ -20,12 +20,11 @@ export const connectToDatabase = async () => {
     }
     try {
         cached.conn = await cached.promise;
+        console.info('MongoDB connected successfully');
     } catch (error) {
         cached.promise = null;
         console.error('MongoDB connection error:', error);
         throw error;
     }
-
-    console.info('MongoDB connected successfully');
     return cached.conn;
 }

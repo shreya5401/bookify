@@ -7,6 +7,7 @@ import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/book-segment.model";
 import mongoose from "mongoose";
 import {getUserPlan} from "@/lib/subscription.server";
+import {del} from "@vercel/blob";
 
 export const getAllBooks = async (search?: string) => {
     try {
@@ -34,7 +35,8 @@ export const getAllBooks = async (search?: string) => {
     } catch (e) {
         console.error('Error connecting to database', e);
         return {
-            success: false, error: e
+            success: false,
+            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
         }
     }
 }
@@ -60,7 +62,8 @@ export const checkBookExists = async (title: string) => {
     } catch (e) {
         console.error('Error checking book exists', e);
         return {
-            exists: false, error: e
+            exists: false,
+            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
         }
     }
 }
@@ -116,10 +119,9 @@ export const createBook = async (data: CreateBook) => {
         }
     } catch (e) {
         console.error('Error creating a book', e);
-
         return {
             success: false,
-            error: e,
+            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
         }
     }
 }
@@ -141,40 +143,104 @@ export const getBookBySlug = async (slug: string) => {
     } catch (e) {
         console.error('Error fetching book by slug', e);
         return {
-            success: false, error: e
+            success: false,
+            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
         }
     }
 }
 
-export const saveBookSegments = async (bookId: string, clerkId: string, segments: TextSegment[]) => {
+export const saveBookSegments = async (bookId: string, _clerkId: string, segments: TextSegment[]) => {
     try {
         await connectToDatabase();
+
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return { success: false, error: { name: 'Unauthorized', message: 'Not authenticated', code: null } };
+        }
+
+        const book = await Book.findById(bookId).lean();
+
+        if (!book) {
+            return { success: false, error: { name: 'NotFound', message: 'Book not found', code: null } };
+        }
+
+        if (book.clerkId !== userId) {
+            return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null } };
+        }
 
         console.log('Saving book segments...');
 
         const segmentsToInsert = segments.map(({ text, segmentIndex, pageNumber, wordCount }) => ({
-            clerkId, bookId, content: text, segmentIndex, pageNumber, wordCount
+            clerkId: userId, bookId, content: text, segmentIndex, pageNumber, wordCount
         }));
 
-        await BookSegment.insertMany(segmentsToInsert);
-
-        await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
+        const session = await mongoose.startSession();
+        try {
+            await session.withTransaction(async () => {
+                await BookSegment.insertMany(segmentsToInsert, { session });
+                await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length }, { session });
+            });
+        } catch (txErr) {
+            const errCode = (txErr as { code?: number }).code;
+            // Standalone MongoDB does not support transactions (code 20); fall back to non-transactional writes.
+            if (errCode === 20) {
+                await BookSegment.insertMany(segmentsToInsert);
+                await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
+            } else {
+                throw txErr;
+            }
+        } finally {
+            await session.endSession();
+        }
 
         console.log('Book segments saved successfully.');
 
         return {
             success: true,
-            data: { segmentsCreated: segments.length}
+            data: { segmentsCreated: segments.length }
         }
     } catch (e) {
         console.error('Error saving book segments', e);
-
         return {
             success: false,
-            error: e,
+            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
         }
     }
 }
+
+export const deleteBook = async (bookId: string, userId: string) => {
+    try {
+        await connectToDatabase();
+
+        const book = await Book.findById(bookId).lean();
+
+        if (!book) {
+            return { success: false, error: 'Book not found' };
+        }
+
+        if (book.clerkId !== userId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
+        const blobUrlsToDelete: string[] = [book.fileURL];
+        if (book.coverURL) blobUrlsToDelete.push(book.coverURL);
+
+        await del(blobUrlsToDelete);
+
+        await BookSegment.deleteMany({ bookId });
+        await Book.findByIdAndDelete(bookId);
+
+        return { success: true };
+    } catch (e) {
+        console.error('Error deleting book', e);
+        return {
+            success: false,
+            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
+        };
+    }
+};
 
 // Searches book segments using MongoDB text search with regex fallback
 export const searchBookSegments = async (bookId: string, query: string, limit: number = 5) => {
@@ -203,7 +269,13 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
 
         // Fallback: regex search matching ANY keyword
         if (segments.length === 0) {
-            const keywords = query.split(/\s+/).filter((k) => k.length > 2);
+            const keywords = query.trim().split(/\s+/).filter((k) => k.length > 2);
+            if (keywords.length === 0) {
+                 return {
+                     success: true,
+                     data: [],
+                 };
+            }
             const pattern = keywords.map(escapeRegex).join('|');
 
             segments = await BookSegment.find({

@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/form';
 import { useAuth } from '@clerk/nextjs';
 import {toast} from 'sonner';
-import {checkBookExists, createBook, saveBookSegments} from "@/lib/actions/book.actions";
+import {checkBookExists, createBook, deleteBook, saveBookSegments} from "@/lib/actions/book.actions";
 import { useRouter } from 'next/navigation';
 import {parsePDFFile} from "@/lib/utils";
 import {upload} from "@vercel/blob/client";
@@ -299,6 +299,7 @@ const UploadForm = () => {
             const segments = await saveBookSegments(book.data._id, userId, parsedPDF.content);
 
             if(!segments.success) {
+                await deleteBook(book.data._id, userId);
                 toast.error("Failed to save book segments");
                 throw new Error("Failed to save book segments");
             }
