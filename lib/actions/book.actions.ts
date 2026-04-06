@@ -210,9 +210,15 @@ export const saveBookSegments = async (bookId: string, _clerkId: string, segment
     }
 }
 
-export const deleteBook = async (bookId: string, userId: string) => {
+export const deleteBook = async (bookId: string) => {
     try {
         await connectToDatabase();
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return { success: false, error: { name: 'Unauthorized', message: 'Not authenticated', code: null } };
+        }
 
         const book = await Book.findById(bookId).lean();
 
