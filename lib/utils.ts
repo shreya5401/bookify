@@ -67,16 +67,16 @@ export const splitIntoSegments = (
   return segments;
 };
 
-// Get voice data by persona key or voice ID
-export const getVoice = (persona?: string) => {
-  if (!persona) return voiceOptions[DEFAULT_VOICE];
+// Get voice data by pvoice key or voice ID
+export const getVoice = (voice?: string) => {
+  if (!voice) return voiceOptions[DEFAULT_VOICE];
 
   // Find by voice ID
-  const voiceEntry = Object.values(voiceOptions).find((v) => v.id === persona);
+  const voiceEntry = Object.values(voiceOptions).find((v) => v.id === voice);
   if (voiceEntry) return voiceEntry;
 
   // Find by key
-  const voiceByKey = voiceOptions[persona as keyof typeof voiceOptions];
+  const voiceByKey = voiceOptions[voice as keyof typeof voiceOptions];
   if (voiceByKey) return voiceByKey;
 
   // Default fallback
