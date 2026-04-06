@@ -223,11 +223,11 @@ export const deleteBook = async (bookId: string) => {
         const book = await Book.findById(bookId).lean();
 
         if (!book) {
-            return { success: false, error: 'Book not found' };
+            return { success: false, error: { name: 'NotFound', message: 'Book not found', code: null } };
         }
 
         if (book.clerkId !== userId) {
-            return { success: false, error: 'Unauthorized' };
+            return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null } };
         }
 
         const blobUrlsToDelete: string[] = [book.fileURL];
@@ -235,8 +235,8 @@ export const deleteBook = async (bookId: string) => {
 
         await del(blobUrlsToDelete);
 
-        await BookSegment.deleteMany({ bookId });
         await Book.findByIdAndDelete(bookId);
+        await BookSegment.deleteMany({ bookId });
 
         return { success: true };
     } catch (e) {
@@ -253,9 +253,30 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
     try {
         await connectToDatabase();
 
-        console.log(`Searching for: "${query}" in book ${bookId}`);
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return { success: false, error: { name: 'Unauthorized', message: 'Not authenticated', code: null }, data: [] };
+        }
+
+        if (!mongoose.isValidObjectId(bookId)) {
+            return { success: false, error: { name: 'ValidationError', message: 'Invalid bookId format', code: null }, data: [] };
+        }
 
         const bookObjectId = new mongoose.Types.ObjectId(bookId);
+
+        const book = await Book.findById(bookObjectId).lean();
+
+        if (!book) {
+            return { success: false, error: { name: 'NotFound', message: 'Book not found', code: null }, data: [] };
+        }
+
+        if (book.clerkId !== userId) {
+            return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null }, data: [] };
+        }
+
+        console.log(`Searching for: "${query}" in book ${bookId}`);
 
         // Try MongoDB text search first (requires text index)
         let segments: Record<string, unknown>[] = [];
