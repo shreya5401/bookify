@@ -7,8 +7,8 @@ import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/book-segment.model";
 import mongoose from "mongoose";
 import {getUserPlan} from "@/lib/subscription.server";
-import {del} from "@vercel/blob";
-import { revalidatePath } from "next/cache";
+import {PLAN_LIMITS} from "@/lib/subscription-constants";
+import {auth} from "@clerk/nextjs/server";
 
 export const getAllBooks = async (search?: string) => {
     try {
@@ -36,8 +36,7 @@ export const getAllBooks = async (search?: string) => {
     } catch (e) {
         console.error('Error connecting to database', e);
         return {
-            success: false,
-            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
+            success: false, error: e
         }
     }
 }
@@ -63,8 +62,7 @@ export const checkBookExists = async (title: string) => {
     } catch (e) {
         console.error('Error checking book exists', e);
         return {
-            exists: false,
-            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
+            exists: false, error: e
         }
     }
 }
@@ -85,11 +83,6 @@ export const createBook = async (data: CreateBook) => {
             }
         }
 
-        // Todo: Check subscription limits before creating a book
-        const { getUserPlan } = await import("@/lib/subscription.server");
-        const { PLAN_LIMITS } = await import("@/lib/subscription-constants");
-
-        const { auth } = await import("@clerk/nextjs/server");
         const { userId } = await auth();
 
         if (!userId || userId !== data.clerkId) {
@@ -113,16 +106,17 @@ export const createBook = async (data: CreateBook) => {
         }
 
         const book = await Book.create({...data, clerkId: userId, slug, totalSegments: 0});
-        revalidatePath("/");
+
         return {
             success: true,
             data: serializeData(book),
         }
     } catch (e) {
         console.error('Error creating a book', e);
+
         return {
             success: false,
-            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
+            error: e,
         }
     }
 }
@@ -144,146 +138,49 @@ export const getBookBySlug = async (slug: string) => {
     } catch (e) {
         console.error('Error fetching book by slug', e);
         return {
-            success: false,
-            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
+            success: false, error: e
         }
     }
 }
 
-export const saveBookSegments = async (bookId: string, _clerkId: string, segments: TextSegment[]) => {
+export const saveBookSegments = async (bookId: string, clerkId: string, segments: TextSegment[]) => {
     try {
         await connectToDatabase();
-
-        const { auth } = await import("@clerk/nextjs/server");
-        const { userId } = await auth();
-
-        if (!userId) {
-            return { success: false, error: { name: 'Unauthorized', message: 'Not authenticated', code: null } };
-        }
-
-        const book = await Book.findById(bookId).lean();
-
-        if (!book) {
-            return { success: false, error: { name: 'NotFound', message: 'Book not found', code: null } };
-        }
-
-        if (book.clerkId !== userId) {
-            return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null } };
-        }
 
         console.log('Saving book segments...');
 
         const segmentsToInsert = segments.map(({ text, segmentIndex, pageNumber, wordCount }) => ({
-            clerkId: userId, bookId, content: text, segmentIndex, pageNumber, wordCount
+            clerkId, bookId, content: text, segmentIndex, pageNumber, wordCount
         }));
 
-        const session = await mongoose.startSession();
-        try {
-            await session.withTransaction(async () => {
-                await BookSegment.insertMany(segmentsToInsert, { session });
-                await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length }, { session });
-            });
-        } catch (txErr) {
-            const errCode = (txErr as { code?: number }).code;
-            // Standalone MongoDB does not support transactions (code 20); fall back to non-transactional writes.
-            if (errCode === 20) {
-                await BookSegment.insertMany(segmentsToInsert);
-                await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
-            } else {
-                throw txErr;
-            }
-        } finally {
-            await session.endSession();
-        }
+        await BookSegment.insertMany(segmentsToInsert);
+
+        await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
 
         console.log('Book segments saved successfully.');
 
         return {
             success: true,
-            data: { segmentsCreated: segments.length }
+            data: { segmentsCreated: segments.length}
         }
     } catch (e) {
         console.error('Error saving book segments', e);
+
         return {
             success: false,
-            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
+            error: e,
         }
     }
 }
-
-export const deleteBook = async (bookId: string) => {
-    try {
-        await connectToDatabase();
-        const { auth } = await import("@clerk/nextjs/server");
-        const { userId } = await auth();
-
-        if (!userId) {
-            return { success: false, error: { name: 'Unauthorized', message: 'Not authenticated', code: null } };
-        }
-
-        const book = await Book.findById(bookId).lean();
-
-        if (!book) {
-            return { success: false, error: { name: 'NotFound', message: 'Book not found', code: null } };
-        }
-
-        if (book.clerkId !== userId) {
-            return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null } };
-        }
-
-        // Delete DB records first so the book is no longer reachable even if blob deletion fails.
-        await Book.findByIdAndDelete(bookId);
-        await BookSegment.deleteMany({ bookId });
-
-        const blobUrlsToDelete: string[] = [book.fileURL];
-        if (book.coverURL) blobUrlsToDelete.push(book.coverURL);
-
-        try {
-            await del(blobUrlsToDelete);
-        } catch (blobErr) {
-            // Log orphaned blobs for out-of-band cleanup; DB records are already gone.
-            console.error('Failed to delete blobs after book removal — manual cleanup may be needed:', blobUrlsToDelete, blobErr);
-        }
-
-        return { success: true };
-    } catch (e) {
-        console.error('Error deleting book', e);
-        return {
-            success: false,
-            error: { name: (e as Error).name, message: (e as Error).message, code: (e as NodeJS.ErrnoException).code ?? null },
-        };
-    }
-};
 
 // Searches book segments using MongoDB text search with regex fallback
 export const searchBookSegments = async (bookId: string, query: string, limit: number = 5) => {
     try {
         await connectToDatabase();
 
-        const { auth } = await import("@clerk/nextjs/server");
-        const { userId } = await auth();
-
-        if (!userId) {
-            return { success: false, error: { name: 'Unauthorized', message: 'Not authenticated', code: null }, data: [] };
-        }
-
-        if (!mongoose.isValidObjectId(bookId)) {
-            return { success: false, error: { name: 'ValidationError', message: 'Invalid bookId format', code: null }, data: [] };
-        }
+        console.log(`Searching for: "${query}" in book ${bookId}`);
 
         const bookObjectId = new mongoose.Types.ObjectId(bookId);
-
-        const book = await Book.findById(bookObjectId).lean();
-
-        if (!book) {
-            return { success: false, error: { name: 'NotFound', message: 'Book not found', code: null }, data: [] };
-        }
-
-        if (book.clerkId !== userId) {
-            return { success: false, error: { name: 'Unauthorized', message: 'You do not own this book', code: null }, data: [] };
-        }
-
-        console.log(`Searching book ${bookId}, query length: ${query.length}`);
 
         // Try MongoDB text search first (requires text index)
         let segments: Record<string, unknown>[] = [];
@@ -296,26 +193,14 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
                 .sort({ score: { $meta: 'textScore' } })
                 .limit(limit)
                 .lean();
-        } catch (err) {
-            // Only fall back to regex when the text index is missing (MongoDB code 27).
-            // Re-throw for any other error so real failures are not silently swallowed.
-            const errCode = (err as { code?: number }).code;
-            if (errCode === 27) {
-                segments = [];
-            } else {
-                throw err;
-            }
+        } catch {
+            // Text index may not exist — fall through to regex fallback
+            segments = [];
         }
 
         // Fallback: regex search matching ANY keyword
         if (segments.length === 0) {
-            const keywords = query.trim().split(/\s+/).filter((k) => k.length > 2);
-            if (keywords.length === 0) {
-                 return {
-                     success: true,
-                     data: [],
-                 };
-            }
+            const keywords = query.split(/\s+/).filter((k) => k.length > 2);
             const pattern = keywords.map(escapeRegex).join('|');
 
             segments = await BookSegment.find({

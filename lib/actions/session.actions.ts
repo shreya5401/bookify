@@ -3,48 +3,45 @@
 import {EndSessionResult, StartSessionResult} from "@/types";
 import {connectToDatabase} from "@/database/mongoose";
 import VoiceSession from "@/database/models/voice-session.model";
-import {getCurrentBillingPeriodStart} from "@/lib/subscription-constants";
+import {PLAN_LIMITS, getCurrentBillingPeriodStart} from "@/lib/subscription-constants";
+import {getUserPlan} from "@/lib/subscription.server";
 
 export const startVoiceSession = async (clerkId: string, bookId: string): Promise<StartSessionResult> => {
     try {
         await connectToDatabase();
 
-        // Limits/Plan to see whether a session is allowed.
-        // const { getUserPlan } = await import("@/lib/subscription.server");
-        // const { PLAN_LIMITS, getCurrentBillingPeriodStart } = await import("@/lib/subscription-constants");
+        const plan = await getUserPlan();
+        const limits = PLAN_LIMITS[plan];
+        const billingPeriodStart = getCurrentBillingPeriodStart();
 
-        // const plan = await getUserPlan();
-        // const limits = PLAN_LIMITS[plan];
-        // const billingPeriodStart = getCurrentBillingPeriodStart();
+        const sessionCount = await VoiceSession.countDocuments({
+            clerkId,
+            billingPeriodStart
+        });
 
-        // const sessionCount = await VoiceSession.countDocuments({
-        //     clerkId,
-        //     billingPeriodStart
-        // });
+        if (sessionCount >= limits.maxSessionsPerMonth) {
+            const { revalidatePath } = await import("next/cache");
+            revalidatePath("/");
 
-        // if (sessionCount >= limits.maxSessionsPerMonth) {
-        //     const { revalidatePath } = await import("next/cache");
-        //     revalidatePath("/");
-
-        //     return {
-        //         success: false,
-        //         error: `You have reached the monthly session limit for your ${plan} plan (${limits.maxSessionsPerMonth}). Please upgrade for more sessions.`,
-        //         isBillingError: true,
-        //     };
-        // }
+            return {
+                success: false,
+                error: `You have reached the monthly session limit for your ${plan} plan (${limits.maxSessionsPerMonth}). Please upgrade for more sessions.`,
+                isBillingError: true,
+            };
+        }
 
         const session = await VoiceSession.create({
             clerkId,
             bookId,
             startedAt: new Date(),
-            billingPeriodStart:getCurrentBillingPeriodStart(),
+            billingPeriodStart,
             durationSeconds: 0,
         });
 
         return {
             success: true,
             sessionId: session._id.toString(),
-            // maxDurationMinutes: limits.maxDurationPerSession,
+            maxDurationMinutes: limits.maxDurationPerSession,
         }
     } catch (e) {
         console.error('Error starting voice session', e);
