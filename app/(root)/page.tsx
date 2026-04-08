@@ -2,7 +2,7 @@ import React from 'react'
 import HeroSection from "@/components/HeroSection";
 import BookCard from "@/components/BookCard";
 import {getAllBooks} from "@/lib/actions/book.actions";
-
+export const dynamic = 'force-dynamic';
 const Page = async ({ searchParams }: { searchParams: Promise<{ query?: string }> }) => {
     const { query } = await searchParams;
 
