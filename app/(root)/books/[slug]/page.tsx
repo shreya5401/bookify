@@ -15,7 +15,7 @@ const Page = async ({ params }: { params: Promise<{ slug: string }> }) => {
 
     if (!result.success || !result.data) redirect('/');
 
-    const { title, author, coverURL, persona } = result.data;
+    const { title, author, coverURL, voice } = result.data;
 
     return (
         <div className="book-page-container">
