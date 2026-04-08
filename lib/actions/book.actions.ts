@@ -8,6 +8,7 @@ import BookSegment from "@/database/models/book-segment.model";
 import mongoose from "mongoose";
 import {getUserPlan} from "@/lib/subscription.server";
 import {del} from "@vercel/blob";
+import { revalidatePath } from "next/cache";
 
 export const getAllBooks = async (search?: string) => {
     try {
@@ -112,7 +113,7 @@ export const createBook = async (data: CreateBook) => {
         }
 
         const book = await Book.create({...data, clerkId: userId, slug, totalSegments: 0});
-
+        revalidatePath("/");
         return {
             success: true,
             data: serializeData(book),
