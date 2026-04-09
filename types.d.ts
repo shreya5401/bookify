@@ -96,6 +96,9 @@ export interface VoiceSelectorProps {
     className?: string;
     value?: string;
     onChange: (voiceId: string) => void;
+    id?: string;
+    'aria-describedby'?: string;
+    'aria-invalid'?: boolean | 'true' | 'false';
 }
 
 export interface InputFieldProps<T extends FieldValues> {

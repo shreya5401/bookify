@@ -182,10 +182,10 @@
     @apply px-1 sm:px-3 text-sm sm:text-base font-medium flex items-center cursor-pointer text-[var(--text-primary)];
   }
   .input-reset {
-    @apply h-12 border-none lg:text-lg! shadow-none focus:outline-none focus-visible:ring-0;
+    @apply h-12 border-none lg:!text-lg shadow-none focus:outline-none focus-visible:ring-0;
   }
   .label {
-    @apply text-lg mb-1 font-medium!;
+    @apply text-lg mb-1 !font-medium;
   }
   .auth-wrapper {
     @apply max-w-7xl px-5 mx-auto w-full min-h-screen pt-20 flex flex-col items-center justify-center py-10;
@@ -197,10 +197,10 @@
     @apply py-18 min-h-screen max-w-7xl px-5 mx-auto w-full flex flex-col pb-12 items-center container;
   }
   .page-title {
-    @apply text-3xl! font-bold text-center;
+    @apply !text-3xl font-bold text-center;
   }
   .page-description {
-    @apply mt-3! text-center text-lg;
+    @apply !mt-3 text-center text-lg;
   }
   .new-book {
     @apply max-w-7xl px-5 mx-auto w-full space-y-6 py-18 min-h-screen;
@@ -212,7 +212,7 @@
     @apply relative z-20 flex flex-col justify-center items-center p-7;
   }
   .form-btn {
-    @apply w-full! h-14 rounded-[10px] bg-[#663820] cursor-pointer hover:bg-[#7a4528] text-xl text-white font-bold transition-colors;
+    @apply !w-full h-14 rounded-[10px] bg-[#663820] cursor-pointer hover:bg-[#7a4528] text-xl text-white font-bold transition-colors;
     font-family: 'IBM Plex Serif', serif;
   }
   .loading-wrapper {
@@ -240,10 +240,10 @@
     @apply w-2 h-2 text-[var(--text-secondary)] bg-[var(--success)] rounded-full animate-pulse;
   }
   .select-trigger {
-    @apply w-full! h-12! rounded-lg;
+    @apply !w-full !h-12 rounded-lg;
   }
   .volume {
-    @apply ml-auto! w-4 h-4 animate-pulse text-[var(--accent-warm)];
+    @apply !ml-auto w-4 h-4 animate-pulse text-[var(--accent-warm)];
   }
   .select-content {
     @apply rounded-xl border border-[var(--border-subtle)] max-h-[400px] shadow-[var(--shadow-soft)];
@@ -425,7 +425,7 @@
     }
   }
   .vapi-mic-btn-active {
-    @apply bg-white;
+    @apply bg-[#212a3b];
   }
   .vapi-mic-btn-inactive {
     @apply bg-white;
@@ -448,6 +448,9 @@
   }
   .vapi-status-dot-connecting {
     @apply bg-yellow-500 animate-pulse;
+  }
+  .vapi-status-dot-starting {
+    @apply bg-blue-500 animate-pulse;
   }
   .vapi-status-dot-listening {
     @apply bg-green-500 animate-pulse;
@@ -920,11 +923,6 @@ button[data-variant='unstyled'] *,
   font-weight: 600 !important;
 }
 
-/* Active plan card - border set by JS via .is-active (see PricingTableActiveIndicator) */
-.cl-pricingTableCard.is-active {
-  border: 2px solid #663820 !important;
-}
-
 /* Style the Active badge with better contrast */
 .cl-badge,
 .cl-pricingTableCard [class*='badge'],
@@ -936,7 +934,12 @@ button[data-variant='unstyled'] *,
   border-radius: 9999px !important;
 }
 
-/* Current plan indicator - real DOM element injected by PricingTableActiveIndicator */
+/* Active plan card — set by PricingTableActiveIndicator via JS DOM detection */
+.cl-pricingTableCard.is-active {
+  border: 2px solid #663820 !important;
+}
+
+/* "Your Current Plan" label injected by PricingTableActiveIndicator */
 .current-plan-indicator {
   display: block;
   text-align: center;
@@ -948,3 +951,33 @@ button[data-variant='unstyled'] *,
   border-radius: 0.75rem;
   font-size: 1.125rem;
 }
+
+.clerk-pricing-container {
+  --cl-color-primary: var(--primary);
+  --cl-color-text: var(--foreground);
+  --cl-color-background: var(--background);
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/*!* Match the app's existing design system *!*/
+/*.clerk-pricing-container :deep(.cl-pricing-table) {*/
+/*  font-family: var(--font-mona-sans), sans-serif;*/
+/*}*/
+
+/*.clerk-pricing-container :deep(.cl-pricing-table-header) {*/
+/*  font-family: var(--font-ibm-plex-serif), serif;*/
+/*}*/
+
+/*.clerk-pricing-container :deep(.cl-pricing-plan-card) {*/
+/*  border: 2px solid var(--border);*/
+/*  border-radius: 12px;*/
+/*  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1);*/
+/*  transition: transform 0.2s ease;*/
+/*}*/
+
+/*.clerk-pricing-container :deep(.cl-pricing-plan-card:hover) {*/
+/*  transform: translate(-2px, -2px);*/
+/*  box-shadow: 6px 6px 0px 0px rgba(0, 0, 0, 1);*/
+/*}*/

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { searchBookSegments } from '@/lib/actions/book.actions';
+import { connectToDatabase } from '@/database/mongoose';
+import VoiceSession from '@/database/models/voice-session.model';
 
 // Helper function to process book search logic
 async function processBookSearch(bookId: unknown, query: unknown) {
@@ -18,8 +20,18 @@ async function processBookSearch(bookId: unknown, query: unknown) {
         return { result: 'Missing bookId or query' };
     }
 
-    // Execute search
-    const searchResult = await searchBookSegments(bookIdStr, queryStr, 3);
+    // Derive the authorized user from the most recent VoiceSession for this book.
+    // VoiceSessions are created server-side with the authenticated clerkId, so this
+    // is a trusted identity — no Clerk session is available in this webhook context.
+    await connectToDatabase();
+    const activeSession = await VoiceSession.findOne({ bookId: bookIdStr })
+        .sort({ startedAt: -1 })
+        .select('clerkId')
+        .lean();
+    const userId = activeSession?.clerkId;
+
+    // Execute search — ownership check inside searchBookSegments uses userId
+    const searchResult = await searchBookSegments(bookIdStr, queryStr, 3, userId);
 
     // Return results
     if (!searchResult.success || !searchResult.data?.length) {
