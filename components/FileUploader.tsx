@@ -18,10 +18,23 @@ const FileUploader = <T extends FieldValues>({
     hint,
 }: FileUploadFieldProps<T>) => {
     const {
-        field: { onChange, value },
+        field: { onChange, value, ref: fieldRef },
     } = useController({ name, control });
 
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Merge react-hook-form's fieldRef (for focus-on-error) with our local inputRef (for .click())
+    const assignRef = useCallback(
+        (el: HTMLInputElement | null) => {
+            (inputRef as React.RefObject<HTMLInputElement | null>).current = el;
+            if (typeof fieldRef === 'function') {
+                fieldRef(el);
+            } else if (fieldRef && 'current' in fieldRef) {
+                (fieldRef as React.RefObject<HTMLInputElement | null>).current = el;
+            }
+        },
+        [fieldRef]
+    );
 
     const handleFileChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,28 +57,42 @@ const FileUploader = <T extends FieldValues>({
         [onChange]
     );
 
+    const handleTriggerKeyDown = useCallback(
+        (e: React.KeyboardEvent) => {
+            if ((e.key === 'Enter' || e.key === ' ') && !disabled) {
+                e.preventDefault();
+                inputRef.current?.click();
+            }
+        },
+        [disabled]
+    );
+
     const isUploaded = !!value;
 
     return (
         <FormItem className="w-full">
             <FormLabel className="form-label">{label}</FormLabel>
-            <FormControl>
+            {/* Wrapper provides focus-within ring so the visual card shows focus when the sr-only input is focused */}
+            <div className="relative focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-ring rounded-lg">
+                <FormControl>
+                    <input
+                        type="file"
+                        accept={acceptTypes.join(',')}
+                        className="sr-only"
+                        ref={assignRef}
+                        onChange={handleFileChange}
+                        disabled={disabled}
+                    />
+                </FormControl>
                 <div
                     className={cn(
                         'upload-dropzone border-2 border-dashed border-[#8B7355]/20',
                         isUploaded && 'upload-dropzone-uploaded'
                     )}
                     onClick={() => !disabled && inputRef.current?.click()}
+                    onKeyDown={handleTriggerKeyDown}
+                    aria-hidden="true"
                 >
-                    <input
-                        type="file"
-                        accept={acceptTypes.join(',')}
-                        className="hidden"
-                        ref={inputRef}
-                        onChange={handleFileChange}
-                        disabled={disabled}
-                    />
-
                     {isUploaded ? (
                         <div className="flex flex-col items-center relative w-full px-4">
                             <p className="upload-dropzone-text line-clamp-1">{(value as File).name}</p>
@@ -85,7 +112,7 @@ const FileUploader = <T extends FieldValues>({
                         </>
                     )}
                 </div>
-            </FormControl>
+            </div>
             <FormMessage />
         </FormItem>
     );

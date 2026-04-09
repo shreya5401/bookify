@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { VoiceSelectorProps } from '@/types';
 
-const VoiceSelector = ({ value, onChange, disabled, className }: VoiceSelectorProps) => {
+const VoiceSelector = ({ value, onChange, disabled, className, id, 'aria-describedby': ariaDescribedby, 'aria-invalid': ariaInvalid }: VoiceSelectorProps) => {
     return (
         <div className={cn('space-y-6', className)}>
             <RadioGroup
@@ -15,6 +15,9 @@ const VoiceSelector = ({ value, onChange, disabled, className }: VoiceSelectorPr
                 onValueChange={onChange}
                 disabled={disabled}
                 className="space-y-8"
+                id={id}
+                aria-describedby={ariaDescribedby}
+                aria-invalid={ariaInvalid}
             >
                 {/* Male Voices */}
                 <div className="space-y-4">
@@ -29,7 +32,8 @@ const VoiceSelector = ({ value, onChange, disabled, className }: VoiceSelectorPr
                                     className={cn(
                                         'voice-selector-option',
                                         isSelected ? 'voice-selector-option-selected' : 'voice-selector-option-default',
-                                        disabled && 'voice-selector-option-disabled'
+                                        disabled && 'voice-selector-option-disabled',
+                                        'focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-[#663820]'
                                     )}
                                 >
                                     <RadioGroupItem value={voiceId} id={voiceId} className="sr-only" />
@@ -66,7 +70,8 @@ const VoiceSelector = ({ value, onChange, disabled, className }: VoiceSelectorPr
                                     className={cn(
                                         'voice-selector-option',
                                         isSelected ? 'voice-selector-option-selected' : 'voice-selector-option-default',
-                                        disabled && 'voice-selector-option-disabled'
+                                        disabled && 'voice-selector-option-disabled',
+                                        'focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-[#663820]'
                                     )}
                                 >
                                     <RadioGroupItem value={voiceId} id={voiceId} className="sr-only" />
